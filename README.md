@@ -26,7 +26,7 @@ func NewUser(username string, age int) User {
 var admin = &User{"admin", -1} // want "User should be initialized in NewUser."
 ```
 
-## Run
+## How to run
 ```
 $ go get -u github.com/joehattori/norawinit
 $ go vet -vettool=`which norawinit` YOUR_PACKAGE
