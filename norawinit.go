@@ -22,6 +22,7 @@ var Analyzer = &analysis.Analyzer{
 	Requires: []*analysis.Analyzer{
 		inspect.Analyzer,
 	},
+	FactTypes: []analysis.Fact{},
 }
 
 const mark = "initWrapper"

@@ -7,7 +7,7 @@ package main
 import (
 	"strings"
 
-	"norawinit"
+	"github.com/joehattori/norawinit"
 	"golang.org/x/tools/go/analysis"
 )
 
@@ -33,4 +33,3 @@ func (analyzerPlugin) GetAnalyzers() []*analysis.Analyzer {
 		norawinit.Analyzer,
 	}
 }
-

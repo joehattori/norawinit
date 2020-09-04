@@ -1,9 +1,8 @@
 package main
 
 import (
-	"norawinit"
+	"github.com/joehattori/norawinit"
 	"golang.org/x/tools/go/analysis/unitchecker"
 )
 
 func main() { unitchecker.Main(norawinit.Analyzer) }
-

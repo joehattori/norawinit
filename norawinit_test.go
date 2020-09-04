@@ -3,7 +3,7 @@ package norawinit_test
 import (
 	"testing"
 
-	"norawinit"
+	"github.com/joehattori/norawinit"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 
@@ -12,4 +12,3 @@ func TestAnalyzer(t *testing.T) {
 	testdata := analysistest.TestData()
 	analysistest.Run(t, testdata, norawinit.Analyzer, "a")
 }
-
