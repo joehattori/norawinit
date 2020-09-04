@@ -42,6 +42,13 @@ var idMatcher = regexp.MustCompile(`^[a-zA-Z_]+\w*`)
 type initFact map[string]string
 
 func (*initFact) AFact() {}
+func (f *initFact) String() string {
+	var arr []string
+	for ty, fn := range *f {
+		arr = append(arr, fmt.Sprintf("%s: %s", ty, fn))
+	}
+	return "wrappers(" + strings.Join(arr, ", ") + ")"
+}
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	initWrappers := make(initFact)
@@ -101,7 +108,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			}
 		case *ast.SelectorExpr:
 			if funcName, ok := initWrappers[t.Sel.Name]; ok {
+				fmt.Println("called")
 				if rng, ok := funcScopes[funcName]; ok && !rng.contains(n.Pos()) {
+					pass.Reportf(n.Pos(), fmt.Sprintf("%s should be initialized in %s.", t.Sel.Name, funcName))
+				} else if !ok {
 					pass.Reportf(n.Pos(), fmt.Sprintf("%s should be initialized in %s.", t.Sel.Name, funcName))
 				}
 			}
@@ -123,7 +133,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 func imported(info *types.Info, spec *ast.ImportSpec) *types.Package {
 	obj, ok := info.Implicits[spec]
 	if !ok {
-		obj = info.Defs[spec.Name] // renaming import
+		obj = info.Defs[spec.Name]
 	}
 	return obj.(*types.PkgName).Imported()
 }
