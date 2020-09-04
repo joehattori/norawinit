@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"regexp"
 	"strings"
 
@@ -22,7 +23,7 @@ var Analyzer = &analysis.Analyzer{
 	Requires: []*analysis.Analyzer{
 		inspect.Analyzer,
 	},
-	FactTypes: []analysis.Fact{},
+	FactTypes: []analysis.Fact{new(initFact)},
 }
 
 const mark = "initWrapper"
@@ -37,24 +38,48 @@ func (r *posRange) contains(n token.Pos) bool {
 }
 
 var idMatcher = regexp.MustCompile(`^[a-zA-Z_]+\w*`)
-var initWrappers = map[string]string{}
-var funcScopes = map[string]*posRange{}
+
+type initFact map[string]string
+
+func (*initFact) AFact() {}
+func (f *initFact) String() string {
+	var arr []string
+	for ty, fn := range *f {
+		arr = append(arr, fmt.Sprintf("%s: %s", ty, fn))
+	}
+	return "wrappers(" + strings.Join(arr, ", ") + ")"
+}
 
 func run(pass *analysis.Pass) (interface{}, error) {
+	initWrappers := make(initFact)
+	funcScopes := map[string]*posRange{}
+
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	file := pass.Files[0]
 	cmap := ast.NewCommentMap(pass.Fset, file, file.Comments)
 
+	doImport := func(spec *ast.ImportSpec) {
+		pkg := imported(pass.TypesInfo, spec)
+		var fact initFact
+		if pass.ImportPackageFact(pkg, &fact) {
+			for ty, wrapper := range fact {
+				initWrappers[ty] = wrapper
+			}
+		}
+	}
+
 	inspect.Preorder([]ast.Node{(*ast.GenDecl)(nil)}, func(n ast.Node) {
 		genDecl := n.(*ast.GenDecl)
 		comments := cmap.Filter(genDecl).Comments()
-		if len(comments) == 0 {
-			return
-		}
 		for i, spec := range genDecl.Specs {
 			switch spec := spec.(type) {
+			case *ast.ImportSpec:
+				doImport(spec)
 			case *ast.TypeSpec:
+				if len(comments) == 0 {
+					return
+				}
 				comment := comments[i].Text()
 				if idx := strings.Index(comment, mark); idx >= 0 {
 					restStr := strings.TrimSpace(comment[idx+len(mark):])
@@ -81,8 +106,34 @@ func run(pass *analysis.Pass) (interface{}, error) {
 					pass.Reportf(n.Pos(), fmt.Sprintf("%s should be initialized in %s.", t.Name, funcName))
 				}
 			}
+		case *ast.SelectorExpr:
+			if funcName, ok := initWrappers[t.Sel.Name]; ok {
+				fmt.Println("called")
+				if rng, ok := funcScopes[funcName]; ok && !rng.contains(n.Pos()) {
+					pass.Reportf(n.Pos(), fmt.Sprintf("%s should be initialized in %s.", t.Sel.Name, funcName))
+				} else if !ok {
+					pass.Reportf(n.Pos(), fmt.Sprintf("%s should be initialized in %s.", t.Sel.Name, funcName))
+				}
+			}
 		}
 	})
 
+	fact := make(initFact)
+	for ty, wrapper := range initWrappers {
+		fact[ty] = wrapper
+	}
+
+	if len(fact) > 0 {
+		pass.ExportPackageFact(&fact)
+	}
+
 	return nil, nil
+}
+
+func imported(info *types.Info, spec *ast.ImportSpec) *types.Package {
+	obj, ok := info.Implicits[spec]
+	if !ok {
+		obj = info.Defs[spec.Name]
+	}
+	return obj.(*types.PkgName).Imported()
 }
