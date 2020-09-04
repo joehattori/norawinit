@@ -71,16 +71,24 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	inspect.Preorder([]ast.Node{(*ast.GenDecl)(nil)}, func(n ast.Node) {
 		genDecl := n.(*ast.GenDecl)
-		comments := cmap.Filter(genDecl).Comments()
-		for i, spec := range genDecl.Specs {
-			switch spec := spec.(type) {
-			case *ast.ImportSpec:
-				doImport(spec)
-			case *ast.TypeSpec:
-				if len(comments) == 0 {
-					return
+		switch genDecl.Tok {
+		case token.IMPORT:
+			for _, spec := range genDecl.Specs {
+				doImport(spec.(*ast.ImportSpec))
+			}
+		case token.TYPE:
+			for _, spec := range genDecl.Specs {
+				spec := spec.(*ast.TypeSpec)
+				var comments []*ast.CommentGroup
+				if genDecl.Lparen == 0 && genDecl.Rparen == 0 {
+					comments = cmap.Filter(genDecl).Comments()
+				} else {
+					comments = cmap.Filter(spec).Comments()
 				}
-				comment := comments[i].Text()
+				if len(comments) == 0 {
+					continue
+				}
+				comment := comments[0].Text()
 				if idx := strings.Index(comment, mark); idx >= 0 {
 					restStr := strings.TrimSpace(comment[idx+len(mark):])
 					if restStr[0] != ':' {
@@ -108,10 +116,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			}
 		case *ast.SelectorExpr:
 			if funcName, ok := initWrappers[t.Sel.Name]; ok {
-				fmt.Println("called")
-				if rng, ok := funcScopes[funcName]; ok && !rng.contains(n.Pos()) {
-					pass.Reportf(n.Pos(), fmt.Sprintf("%s should be initialized in %s.", t.Sel.Name, funcName))
-				} else if !ok {
+				if rng, ok := funcScopes[funcName]; ok && !rng.contains(n.Pos()) || !ok {
 					pass.Reportf(n.Pos(), fmt.Sprintf("%s should be initialized in %s.", t.Sel.Name, funcName))
 				}
 			}
